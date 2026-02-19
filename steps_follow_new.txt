@@ -1,0 +1,51 @@
+Step 1 :
+----------- 
+Place EncounterData.xlsx,bmi.csv files in input folder
+
+
+step 2: 
+------------
+pip install --user pandas openpyxl azure-storage-blob azure-identity 
+
+
+Step 3 :
+-------------
+az storage blob download \
+  --account-name genafuncapp \
+  --auth-mode login \
+  --container-name scripts \
+  --name pregnancy_bmi_orchestrator.py \
+  --file pregnancy_bmi_orchestrator.py
+  
+
+step 4 :
+----------
+python3 pregnancy_bmi_orchestrator.py   
+ 
+
+step 5 :
+-------------
+az storage blob download \
+  --account-name genafuncapp \
+  --auth-mode login \
+  --container-name scripts \
+  --name Patient_join_evicore_combined.py \
+  --file Patient_join_evicore_combined.py  
+
+  
+step 5 :
+--------------
+--Combined file 
+ python3 Patient_join_evicore_combined.py \
+  --account-name genafuncapp \
+  --encounters-container input \
+  --encounters-blob EncounterData.xlsx \
+  --step4-container output \
+  --step4-prefix "" \
+  --diabetes-rules-container input \
+  --diabetes-rules-blob diabetes_rules_norm.csv \
+  --obesity-rules-container input \
+  --obesity-rules-blob obesity_rules_norm.csv \
+  --output-container output \
+  --output-prefix ""    
+  
