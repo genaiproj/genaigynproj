@@ -222,7 +222,7 @@ def load_step4_df(raw_csv: bytes) -> pd.DataFrame:
         else:
             df["BMI_at_pregnancy_start_num"] = pd.NA
 
-    for col in ["category", "category_reason", "pregnancy_complications"]:
+    for col in ["category", "category_reason", "pregnancy_complications","pregnancy_complications_details"]:
         if col not in df.columns:
             df[col] = ""
 
@@ -603,9 +603,10 @@ def _apply_rules_for_program(
     else:
         raise ValueError(f"Unknown program: {program}")
 
+        
     for _, p in cohort.iterrows():
         pid = _normalize_patient_id(p.get("patient_id", ""))
-        preg_start = _to_dt(p.get("start_of_pregnancy_date"))   
+        preg_start = _to_dt(p.get("start_of_pregnancy_date"))           
         fgr_yn = p.get("has_fgr","")
         if not pid or pd.isna(preg_start):
             continue
@@ -677,10 +678,11 @@ def _apply_rules_for_program(
                 "date_of_birth": _fmt_mdy(_to_dt(p.get("date_of_birth"))),
                 "start_of_pregnancy_date": _fmt_mdy(preg_start),
                 "payer": p.get("payer", ""),
-                #"pregnancy_complications": p.get("pregnancy_complications", ""),
-                "pregnancy_complications": p.get("category_reason", ""),
+                "pregnancy_complications": p.get("pregnancy_complications", ""),
+                #"pregnancy_complications": p.get("category_reason") if p.get("category_reason") is not None else p.get("pregnancy_complications"),               
                 #"category": p.get("category", ""),
                 #"category_reason": p.get("category_reason", ""),
+                "pregnancy_complications_details": p.get("category_reason", ""),
                 "BMI_at_pregnancy_start": bmi if bmi is not None else "",
                 "has_fgr" : fgr_yn,
 
@@ -791,6 +793,7 @@ def main() -> None:
         "pregnancy_complications", 
         # "category", 
         # "category_reason",
+        "pregnancy_complications_details",
         "BMI_at_pregnancy_start",
         "has_fgr",
         # "condition_id", 
