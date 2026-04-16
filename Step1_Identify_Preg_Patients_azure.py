@@ -268,6 +268,18 @@ class PregnantPatientsIdentifier:
         payer_col = "payer" if "payer" in sorted_encounters.columns else "Payer"
         vals = sorted_encounters[payer_col].dropna()
         return vals.iloc[-1] if not vals.empty else "Unknown"
+        
+    #added based on discussion 27-03-2026
+
+    # find max encounter date
+    def get_latest_encounter_date(self, patient_group: pd.DataFrame):
+        vals = patient_group["encounter_date"].dropna()
+        return vals.max() if not vals.empty else None    
+        
+    # find min encounter date
+    def get_first_encounter_date(self, patient_group: pd.DataFrame):
+        vals = patient_group["encounter_date"].dropna()
+        return vals.min() if not vals.empty else None        
 
     def identify_complications(self, patient_group: pd.DataFrame):
         codes, desc_text = _flatten_dx(patient_group)
@@ -295,18 +307,18 @@ class PregnantPatientsIdentifier:
             (r"bleeding", "Antepartum Hemorrhage"),
             (r"infection", "Pregnancy-related Infection"),
             (r"thrombosis", "Thrombosis Risk"),
-            (r"screening for oth suspected endocrine disorder", "Endocrine Disorder Screening"),
+           # (r"screening for oth suspected endocrine disorder", "Endocrine Disorder Screening"),
             (r"diseases of the circ sys comp pregnancy", "Circulatory System Complications"),
             (r"gestational diabetes", "Gestational Diabetes"),               
             (r"diabetes", "Diabetes in Pregnancy"), 
-            (r"personal history of gestational diabetes", "Personal history of gestational diabetes"),
+            #(r"personal history of gestational diabetes", "Personal history of gestational diabetes"),
         ]
 
         desc_cols = ["DiagICD_10_Desc1", "DiagICD_10_Desc2", "DiagICD_10_Desc3", "DiagICD_10_Desc4"]
 
         complications = []
         for pattern, label in complication_patterns:
-            if diabetes_cat and label in ("Gestational Diabetes", "Diabetes in Pregnancy", "Personal history of gestational diabetes"):
+            if diabetes_cat and label in ("Gestational Diabetes", "Diabetes in Pregnancy"):
                 continue
             comp_encounters = patient_group[patient_group[desc_cols].apply(
                 lambda row: any(
@@ -374,12 +386,7 @@ class PregnantPatientsIdentifier:
             if fgr_flag:
                 category_tags.append("FGR|YES")
                 category_reasons.append("FGR|YES: matched FGR logic")
-                
-            # added 2026-03-02 for Endocrine Disorder Screening
-            if any(str(c).strip().lower() == "endocrine disorder screening" for c in (complications or [])):
-                category_tags.append("ENDOCRINE")
-                category_reasons.append("ENDOCRINE|DX_SIGNAL: diagnosis text indicates endocrine disorder")    
-
+                           
 
             def _dedupe_keep_order(items):
                 seen = set()
@@ -398,6 +405,10 @@ class PregnantPatientsIdentifier:
             category_reason = "; ".join(_dedupe_keep_order(category_reasons))
             has_fgr = "Y" if fgr_flag else "N"
             payer = self.get_latest_payer(patient_group)
+            
+            # added based on discussion 27-03-2026
+            latest_encounter_date = self.get_latest_encounter_date(patient_group)
+            first_encounter_date  = self.get_first_encounter_date(patient_group)
 
             pregnant_patients.append({
                 "patient_id": patient_id,
@@ -413,13 +424,26 @@ class PregnantPatientsIdentifier:
                 # "category_reason": category_reason,
                 "pregnancy_complications_details": category_reason,
                 "has_fgr": has_fgr,
-                "is_pregnancy_completed": is_completed,
-                "reason_for_pregnancy_completion": completion_reason or "",
+                
+                # Commented as per discussion dated 27-03-2026
+                #"is_pregnancy_completed": is_completed,
+                #"reason_for_pregnancy_completion": completion_reason or "",
+                
                 "maternal_age_at_start_of_pregnancy": maternal_age_at_start,
+                # added based on discussion 27-03-2026
+                "first_encounter_date" : first_encounter_date,
+                "latest_encounter_date": latest_encounter_date,
             })
 
+        # added 16-04-2026 to filter ga<41
+        pregnant_patients = [r for r in pregnant_patients if r.get("current_gestational_age") not in ("", None) and float(r.get("current_gestational_age")) < 41
+]
+        
+        # Sort by gestational age DESCENDING added 14-04-2026
+        pregnant_patients.sort(key=lambda r: r.get("current_gestational_age", ""), reverse=True)
         df = pd.DataFrame(pregnant_patients)
 
+        # Rename step4 output file , added 14-0402026
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_file = os.path.join(self.output_dir, f"Current_Pregnant_Patients_{timestamp}.csv")
 

@@ -26,7 +26,9 @@ DELIVERY_CPTS = {
     "59610", "59612", "59614", "59618", "59620", "59622",
 }
 
-STEP4_NAME_TS = re.compile(r"step4_(\d{8})_(\d{6})", re.IGNORECASE)
+#added on 14-04-2026
+#STEP4_NAME_TS = re.compile(r"step4_(\d{8})_(\d{6})", re.IGNORECASE)
+STEP4_NAME_TS = re.compile(r"WHF_.*_(\d{8})_(\d{6})", re.IGNORECASE)
 CPT_5DIGIT = re.compile(r"\b(\d{5})\b")
 
 
@@ -118,10 +120,13 @@ def pick_latest_two_step4(
     cc = bsc.get_container_client(container)
     found: List[Tuple[Optional[datetime], datetime, str]] = []
 
-    for b in cc.list_blobs(name_starts_with=prefix + "step4_"):
+    #for b in cc.list_blobs(name_starts_with=prefix + "step4_"):
+    for b in cc.list_blobs(name_starts_with=prefix + "WHF_"):
         name = b.name
         low = name.lower()
-        if "care_tracking_output" not in low:
+        #added on 14-04-2026
+        #if "care_tracking_output" not in low:
+        if "current_pregnant_patients" not in low:
             continue
         if not (low.endswith(".csv") or low.endswith(".csv.csv")):
             continue
@@ -225,13 +230,17 @@ def write_report(rows: List[Dict], evidence_df: pd.DataFrame, meta: Dict, out_pa
     ws["B5"] = meta.get("window_start", "")
     ws["A6"] = "Drop window end"
     ws["B6"] = meta.get("window_end", "")
-    ws["A7"] = "Dropped patients"
+    ws["A7"] = "Count of Dropped patients"
     ws["B7"] = meta.get("dropped_count", 0)
+    ws["A8"] = "Count of patients with Gestational age > 41 "
+    ws["B8"] = meta.get("ga_41_count", 0)
 
     header_row = 9
     headers = [
         "priority",
         "patient_id",
+        "first_encounter_date",
+        "start_of_pregnancy_date",
         "delivery_in_window",
         "delivery_date_in_window",
         "delivery_cpt_in_window",
@@ -311,6 +320,13 @@ def main() -> None:
     dropped_set = set(dropped)
 
     enc_df = load_encounters(download_bytes(bsc, BlobRef(args.encounters_container, args.encounters_blob)))
+    
+    # added as per discussion on 27-03-2026
+    # filter patients with GA > 41
+    latest_df["current_gestational_age"] = pd.to_numeric(latest_df["current_gestational_age"], errors="coerce")
+    high_ga_df = latest_df[latest_df["current_gestational_age"] > 41].copy()
+    
+    ga_41_count = len(high_ga_df)
 
     delivery_all = enc_df[(enc_df["patient_id"].isin(dropped_set)) & (enc_df["cpt"].isin(DELIVERY_CPTS))].copy()
     delivery_all = delivery_all.dropna(subset=["dos"]).sort_values(["patient_id", "dos", "cpt"])
@@ -338,6 +354,9 @@ def main() -> None:
         return _fmt_date(g["dos"].max()), ", ".join(sorted(set(g["cpt"].tolist())))
 
     rows: List[Dict] = []
+    
+    # consider previous lookup as latest lookup no data for corresponding patient
+    prev_lookup = prev_df.set_index("patient_id").to_dict(orient="index")
     for pid in dropped:
         g_any = by_pid_any.get(pid)
         g_win = by_pid_win.get(pid)
@@ -354,13 +373,19 @@ def main() -> None:
         else:
             priority = 3
             note = "Delivery CPT found in expected window."
+        
 
         win_date, win_codes = last_date_and_codes(g_win)
-        any_date, any_codes = last_date_and_codes(g_any)
+        any_date, any_codes = last_date_and_codes(g_any)   
+
+        patient_info = prev_lookup.get(pid, {})
+    
 
         rows.append({
             "priority": priority,
             "patient_id": pid,
+            "first_encounter_date" :patient_info.get("first_encounter_date", ""),
+            "start_of_pregnancy_date" :patient_info.get("start_of_pregnancy_date", ""),
             "delivery_in_window": "Y" if win_found else "N",
             "delivery_date_in_window": win_date,
             "delivery_cpt_in_window": win_codes,
@@ -369,11 +394,32 @@ def main() -> None:
             "delivery_cpt_anytime": any_codes,
             "notes": note,
         })
+        
+        # added as per discussion on 27-03-2026
+        
+        existing_pids = set(r["patient_id"] for r in rows)
+        for pid in high_ga_df["patient_id"].unique():
+            if pid not in existing_pids:
+                rows.append({
+                    "priority": 4,
+                    "patient_id": pid,
+                    "first_encounter_date" : "",
+                    "start_of_pregnancy_date" : "",
+                    "delivery_in_window": "N",
+                    "delivery_date_in_window": "",
+                    "delivery_cpt_in_window": "",
+                    "delivery_anytime": "N",
+                    "delivery_date_anytime": "",
+                    "delivery_cpt_anytime": "",
+                    "notes": "Gestational Age > 41 Weeks."
+                })
 
     rows.sort(key=lambda r: (r.get("priority", 9), str(r.get("patient_id", ""))))
 
-    report_date = datetime.now().strftime("%Y%m%d")
-    local_out = args.local_out.strip() or f"DeliveryTrackingReport_{report_date}.xlsx"
+    #added 14-04-2026
+    #report_date = datetime.now().strftime("%Y%m%d")
+    report_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    local_out = args.local_out.strip() or f"Delivery_Tracking_Report_{report_ts}.xlsx"
 
     write_report(
         rows=rows,
@@ -385,6 +431,7 @@ def main() -> None:
             "window_start": window_start_print,
             "window_end": window_end_print,
             "dropped_count": len(dropped),
+            "ga_41_count":ga_41_count,
         },
         out_path=local_out,
     )

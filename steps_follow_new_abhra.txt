@@ -1,0 +1,81 @@
+Step 1 :
+----------- 
+Place EncounterData.xlsx,bmi.csv files in input folder
+
+step 2: 
+------------
+pip install --user pandas openpyxl azure-storage-blob azure-identity 
+
+
+Step-3 :
+-----------
+export AZURE_STORAGE_CONNECTION_STRING="DefaultEndpointsProtocol=https;AccountName=genafuncapp;AccountKey=JP3G7fHs9sw4ZH72KbbQBc/ZrJtVP14uWKS6q6DsXDQuALBwWEDTt82790EPX88hy2gcnkf+9ZxY+AStNTto9Q==;EndpointSuffix=core.windows.net"
+
+
+
+Step 4 :
+-------------
+az storage blob download \
+  --account-name genafuncapp \
+  --auth-mode login \
+  --container-name scripts \
+  --name pregnancy_bmi_orchestrator.py \
+  --file pregnancy_bmi_orchestrator.py
+  
+
+step 5 :
+----------
+python3 pregnancy_bmi_orchestrator.py   
+ 
+
+step 6 :
+-------------
+az storage blob download \
+  --account-name genafuncapp \
+  --auth-mode login \
+  --container-name scripts \
+  --name Patient_join_evicore_combined_rulescompact.py \
+  --file Patient_join_evicore_combined_rulescompact.py  
+
+  
+step 7 :
+--------------
+--Combined file 
+ python3 Patient_join_evicore_combined_rulescompact.py \
+   --account-name genafuncapp \
+  --encounters-container input \
+  --encounters-blob EncounterData.xlsx \
+  --mapping-container input \
+  --mapping-blob "MultipleConditions_Evicore_Mapping.xlsx" \
+  --step4-container output \
+  --step4-prefix "" \
+  --output-container output \
+  --output-prefix ""  
+
+=============================================================================================================================
+
+
+
+
+
+date : 23-03-2026 (For Abhra testing only)
+
+az storage blob download \
+  --account-name genafuncapp \
+  --auth-mode login \
+  --container-name scripts \
+  --name Patient_join_evicore_combined_anjan_wip.py\
+  --file Patient_join_evicore_combined_anjan_wip.py  
+  
+  
+python3 Patient_join_evicore_combined_anjan.py \
+  --account-name genafuncapp \
+  --encounters-container input \
+  --encounters-blob EncounterData.xlsx \
+  --mapping-container input \
+  --mapping-blob "MultipleConditions_Evicore_Mapping.xlsx" \  
+  --step4-container output \
+  --step4-prefix "" \
+  --output-container output \
+  --output-prefix ""  
+  

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# Update 13-04-2026 for add sorting and rename output file as per mail from satarupa dated 13-04-2026
+
 import os
 import sys
 import argparse
@@ -63,10 +65,13 @@ def run_step4_local(step3_csv_path: str, output_dir: str):
     step3_df = pd.read_csv(step3_csv_path, encoding="latin1")
     care_df = step3_df
 
-    out_path = os.path.join(output_dir, "BMICare_Tracking_output.csv")
+    # out_path = os.path.join(output_dir, "BMICare_Tracking_output.csv")
+    #added 13-04-2026
+    out_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    out_path = os.path.join(output_dir, f"Current_Pregnant_Patients_{out_ts}.csv")
     care_df.to_csv(out_path, index=False)
-
-
+    
+    
 def main():
     parser = argparse.ArgumentParser(
         description=(
@@ -116,8 +121,11 @@ def main():
 
     final_csv = find_newest_csv(output_dir)
 
+    #added on 14-04-2026
     out_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    out_blob_name = f"step4_{out_ts}_{os.path.basename(final_csv)}"
+    #out_blob_name = f"step4_{out_ts}_{os.path.basename(final_csv)}"
+    base = os.path.splitext(os.path.basename(final_csv))[0]
+    out_blob_name = f"WHF_{base}.csv"
 
     upload_file(bsc, args.output_container, final_csv, out_blob_name)
 
